@@ -1,0 +1,836 @@
+package com.clowngineering.dominic;
+
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Image;
+import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.InputStream;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Random;
+
+import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JRootPane;
+import javax.swing.JTextField;
+import javax.swing.border.TitledBorder;
+import javax.swing.text.AbstractDocument;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DocumentFilter;
+
+/**
+ * http://letterword.com/index.php/four-letter-words-starting-with-b-and-ending-in-t/
+ * @author robin.cox
+ *
+ */
+public class DomMain implements ActionListener {
+
+	JFrame jf;
+	JTextField letterValueTF = new JTextField(5);
+	JTextField numericValueTF  = new JTextField(15);
+	JLabel      isMasterJL     = new JLabel("   ");
+	JTextField answerTF = new JTextField(15);
+	JButton    runJB    = new JButton("Start!");
+	JButton    submitJB = new JButton("Submit");
+	JButton    pauseJB  = new JButton("Pause");
+	//JButton    cancelJB = new JButton("Stop");
+	JButton    exitJB   = new JButton("Exit");
+	JButton    peekJB   = new JButton("Hint");
+	JButton    masterJB = new JButton("Make Master");
+	JLabel     peekJL = new JLabel("               ");
+	JLabel     imageJL = new JLabel();
+	JMenuItem modeMI = new JMenuItem("Mode");   
+	JMenuItem loadMI = new JMenuItem("Load...");
+	JMenuItem exitMI = new JMenuItem("Exit");   
+	
+	JLabel dummyNorth = new JLabel(" ");
+	JLabel dummySouth = new JLabel(" " );
+	
+	
+	boolean running;
+	DomWord currentDw;
+	long start;
+	long stop;
+	DocumentFilter filter = new UppercaseDocumentFilter();
+	Random rand = new Random();
+	int min = 0;
+	int max = 9;
+	HashMap<String, DomWord> masterDominicHM = new HashMap<String, DomWord>();
+
+	HashMap<String, ArrayList<DomGuess>> guessesHM = new HashMap<String, ArrayList<DomGuess>>();
+	HashMap<String,String> majorLettersHM = new HashMap<String,String>();
+	String tab = "     ";
+	String masterFname = "master.txt";
+	String guessFname  = "guess.bin";
+	String guessFnameText = "guess.csv";
+	String majorFname = "major.txt";
+	
+	final static int imageWidth=100;
+	final static int imageHeight=100;
+	boolean ezMode;
+	protected void loadMasterDomWordsFromTextFile()
+	{
+		File f = new File(masterFname);
+		BufferedReader br =null;
+		if( !f.exists() )
+		{
+			return;
+		}
+		try
+		{
+			br =  new BufferedReader(new FileReader(masterFname));
+			String line=null;
+			while( (line=br.readLine()) != null )
+			{
+				try
+				{
+					String[] s = line.split(",");
+					DomWordMaster dwm = new DomWordMaster(s[0],s[1],s[2]);
+					masterDominicHM.put(s[0],dwm);
+				}
+				catch(Throwable t)
+				{
+					System.out.println("Warning, skipping bad master value [" + line + "] " + t.getMessage());
+				}
+			}
+		}
+		catch(Throwable t)
+		{
+			t.printStackTrace();
+		}
+		finally
+		{
+			if(br != null )try{br.close();}catch(Throwable t){}
+		}
+	}
+	protected void loadMajorLettersFromTextFile()
+	{
+	        File f = new File(majorFname);
+	        BufferedReader br =null;
+	        if( !f.exists() )
+	        {
+	            return;
+	        }
+	        try
+	        {
+	            br =  new BufferedReader(new FileReader(majorFname));
+	            String line=null;
+	            while( (line=br.readLine()) != null )
+	            {
+	                try
+	                {
+	                    String[] s = line.split(",");
+	                    majorLettersHM.put(s[0],s[1]);
+	                }
+	                catch(Throwable t)
+	                {
+	                    System.out.println("Warning, skipping bad major value [" + line + "] " + t.getMessage());
+	                }
+	            }
+	        }
+	        catch(Throwable t)
+	        {
+	            t.printStackTrace();
+	        }
+	        finally
+	        {
+	            if(br != null )try{br.close();}catch(Throwable t){}
+	            if(majorLettersHM.size() == 0)
+	                buildDefaultMajorValues();
+	        }
+	    }
+	protected void saveMasterDomWordsToTextFile()
+	{
+		FileWriter fw = null;
+		try
+		{
+			fw = new FileWriter(masterFname);
+			
+			List<String> keys=new ArrayList(masterDominicHM.keySet());
+			Collections.sort(keys);
+			for(String key:keys)
+			{
+				fw.write(key);
+				fw.write(",");
+				fw.write(masterDominicHM.get(key).letterValue);
+				fw.write(",");
+				fw.write(masterDominicHM.get(key).word);
+				fw.write(System.getProperty("line.separator"));
+			}
+		}
+		catch(Throwable t)
+		{
+			t.printStackTrace();
+		}
+		finally
+		{
+			if( fw != null )
+			{
+				try{fw.close();}catch(Throwable t){}
+			}
+		}
+	}
+	   protected void saveMajorLettersToTextFile()
+	    {
+	        FileWriter fw = null;
+	        try
+	        {
+	            fw = new FileWriter(majorFname);
+	            
+	            List<String> keys=new ArrayList<String>(majorLettersHM.keySet());
+	            Collections.sort(keys);
+	            for(String key:keys)
+	            {
+	                fw.write(key);
+	                fw.write(",");
+	                fw.write(majorLettersHM.get(key));
+	                fw.write(System.getProperty("line.separator"));
+	            }
+	        }
+	        catch(Throwable t)
+	        {
+	            t.printStackTrace();
+	        }
+	        finally
+	        {
+	            if( fw != null )
+	            {
+	                try{fw.close();}catch(Throwable t){}
+	            }
+	        }
+	    }
+	protected void loadGuesses()
+	{
+		File f = new File(guessFname);
+		if( !f.exists() )
+		{
+			return;
+		}
+		ObjectInput input=null;
+		try
+		{
+		  InputStream file = new FileInputStream( guessFname );
+	      InputStream buffer = new BufferedInputStream( file );
+	      input = new ObjectInputStream( buffer );
+          this.guessesHM = (HashMap<String,ArrayList<DomGuess>>)input.readObject();
+	     }
+		catch(Throwable t)
+		{
+			t.printStackTrace();
+		}
+	    finally{
+	    	try{if( input != null )input.close();}catch(Throwable t){}
+	    }
+	}
+	protected void saveGuessesToTextFile()
+	{
+		FileWriter fw = null;
+		try
+		{
+			fw = new FileWriter(guessFnameText);
+			
+			List<String> keys=new ArrayList(guessesHM.keySet());
+			Collections.sort(keys);
+			for(String key:keys)
+			{
+				ArrayList<DomGuess> dgs = guessesHM.get(key);
+				for( DomGuess dg: dgs)
+				{
+					
+					fw.write(dg.numericValue);
+					fw.write(",");
+					fw.write(dg.letterValue);
+					fw.write(",");
+					fw.write(dg.word);
+					fw.write(",");
+					fw.write(""+dg.numGuesses);
+					fw.write(",");
+
+					fw.write(""+dg.startTime);
+					fw.write(",");
+					fw.write(""+dg.stopTime);
+					fw.write(",");
+					fw.write(""+dg.sumOfTimesToGuess);
+					fw.write(System.getProperty("line.separator"));
+				}
+			}
+		}
+		catch(Throwable t)
+		{
+			t.printStackTrace();
+		}
+		finally
+		{
+			if( fw != null )
+			{
+				try{fw.close();}catch(Throwable t){}
+			}
+		}
+	}
+	protected void loadGuessesFromTextFile()
+    {
+	    //          this.guessesHM = (HashMap<String,ArrayList<DomGuess>>)input.readObject();
+
+        File f = new File(guessFnameText);
+        BufferedReader br =null;
+        if( !f.exists() )
+        {
+            return;
+        }
+        try
+        {
+            br =  new BufferedReader(new FileReader(guessFnameText));
+            String line=null;
+            while( (line=br.readLine()) != null )
+            {
+                try
+                {
+                    String[] s = line.split(",");
+                    String key = s[0];
+                    DomGuess dg = new DomGuess(key,s[1],s[2],(long)0,Integer.parseInt(s[3]));
+                    dg.startTime = Long.parseLong(s[4]);
+                    dg.stopTime = Long.parseLong(s[5]);
+                    dg.sumOfTimesToGuess = Float.parseFloat(s[6]);
+                    ArrayList<DomGuess> al = null;
+                    if( guessesHM.containsKey(key))
+                    {
+                        al = guessesHM.get(key);
+                    }
+                    else
+                    {
+                        al = new ArrayList<DomGuess>();
+                    }
+                    al.add(dg);
+                    guessesHM.put(key,al);
+                }
+                catch(Throwable t)
+                {
+                    System.out.println("Warning, skipping bad guess value [" + line + "] " + t.getMessage());
+                }
+            }
+        }
+        catch(Throwable t)
+        {
+            t.printStackTrace();
+        }
+        finally
+        {
+            if(br != null )try{br.close();}catch(Throwable t){}
+        }
+    }
+	protected void saveGuesses()
+	{
+		ObjectOutput output = null;		
+		try{
+		      OutputStream file = new FileOutputStream( guessFname );
+		      OutputStream buffer = new BufferedOutputStream( file );
+		      output = new ObjectOutputStream( buffer );
+		      output.writeObject(guessesHM);
+		}
+		catch(Throwable t)
+		{
+			t.printStackTrace();
+		}
+		finally{
+	    	try{if( output != null )output.close();}catch(Throwable t){}
+	    }
+	}
+
+	public static void main(String[] args) {
+		DomMain dm = new DomMain();
+		dm.buildDefaultMajorValues();
+		dm.buildUI();
+		dm.loadMajorLettersFromTextFile();
+		dm.loadGuessesFromTextFile();
+		dm.loadMasterDomWordsFromTextFile();
+		dm.jf.setVisible(true);
+
+	}
+	protected void makeThisAMasterWord(String nv, String lv, String w)
+	{
+		if( !masterDominicHM.containsKey(nv))
+		{
+			DomWord dw = new DomWord(nv, lv, w);
+			masterDominicHM.put(nv,dw);
+			System.out.println("added " + lv + "/" + w);
+		}
+		else
+		{
+			DomWord dw = masterDominicHM.get(nv);
+			dw.word = w;
+			System.out.println("updated " + lv + "/w " + w);
+		}
+	}
+	protected void buildDefaultMajorValues()
+	{
+		majorLettersHM.put("0","C");
+		majorLettersHM.put("1","T");
+		majorLettersHM.put("2","N");
+		majorLettersHM.put("3","M");
+		majorLettersHM.put("4","R");
+		majorLettersHM.put("5","S");
+		majorLettersHM.put("6","G");
+		majorLettersHM.put("7","L");
+		majorLettersHM.put("8","B");
+		majorLettersHM.put("9","P");
+
+	}
+	protected DomWord getRandomDominicWord()
+	{
+		
+		int upperByte = rand.nextInt(max-min+1)+min;
+		int lowerByte = rand.nextInt(max-min+1)+min;
+		assert(upperByte >= 0 && upperByte <=9 && lowerByte >=0 && lowerByte <=9);
+		
+		
+		//DomWord dw = new DomWord(""+upperByte+lowerByte,
+		//		                 majorHM.get(""+upperByte)+majorHM.get(""+lowerByte));
+		DomWord dw = new DomWord("00","CC");
+		dw.word = masterDominicHM.get(dw.numericValue).word;
+		return dw;
+	}
+	protected void primeUIWithNextDomWord()
+	{
+		currentDw = getRandomDominicWord();
+		numericValueTF.setText(""+currentDw.numericValue);
+		if( ezMode )
+		{	
+		    letterValueTF.setText(currentDw.letterValue);
+		    setImage();
+		}
+		else
+		{
+		    letterValueTF.setText("     ");
+		    imageJL.setIcon(null);
+		}
+		start = System.currentTimeMillis();
+		answerTF.requestFocusInWindow();
+		peekJL.setText("               ");
+		// prolly dont need this since we have a full master list now
+		/*if( masterDominicHM.containsKey(currentDw.numericValue))
+			isMasterJL.setText("*");
+		else
+			isMasterJL.setText(" ");
+		*/
+	}
+	protected void submitGuess( )
+	{
+		if(answerTF.getText().trim().equals(""))
+			answerTF.setText("PASS");
+		String usersWord = answerTF.getText().trim();
+		stop = System.currentTimeMillis();
+		long totaltime = stop-start;
+		//System.out.println("totaltime: [" + totaltime + "] msecs");
+		//currentDw.word = answerTF.getText().trim();
+		boolean found = false;
+
+		if( guessesHM.containsKey(currentDw.numericValue))
+		{
+			// this numeric has been guessed at before...
+			ArrayList<DomGuess> dgs = guessesHM.get(currentDw.numericValue);
+			for(DomGuess dg:dgs)
+			{
+				// so see if the user's guess has been used before...
+				if(dg.word.equals(usersWord))
+				{
+					// user has used this word before so bump up its count
+					dg.numGuesses++;dg.addTTG(totaltime);dg.startTime=start;dg.stopTime=stop;found=true;break;
+				}
+			}
+			if( !found )
+			{
+				// user used word that has not been guessed at before
+				DomGuess dg = new DomGuess(currentDw.numericValue,
+				    majorLettersHM.get(numericValueTF.getText().substring(0,1))+
+                    majorLettersHM.get(numericValueTF.getText().substring(1)),
+                    usersWord,totaltime,1);
+				dg.startTime = start;
+				dg.stopTime = stop;
+				dgs.add(dg );
+
+			}
+		}
+		else
+		{
+			ArrayList<DomGuess> al = new ArrayList<DomGuess>();
+			DomGuess dg =new DomGuess(currentDw.numericValue,
+			    majorLettersHM.get(numericValueTF.getText().substring(0,1))+
+                majorLettersHM.get(numericValueTF.getText().substring(1)),
+                usersWord,totaltime,1);
+			dg.startTime = start;
+			dg.stopTime = stop;
+			al.add(dg );
+			guessesHM.put(currentDw.numericValue,al);
+		}
+		answerTF.setText("");
+		primeUIWithNextDomWord();
+	}
+	protected void displayResults()
+	{
+		System.out.println("Total of [" + guessesHM.size() + "] guesses presented");
+		System.out.println("Total of [" + masterDominicHM.size() + "] master words");
+		List<String> keys=new ArrayList(guessesHM.keySet());
+		Collections.sort(keys);
+		//Set<String> keys = guessesHM.keySet();
+		for( String keyOfGuessedWord:keys)
+		{
+			String masterNv=keyOfGuessedWord ;
+			String masterLv=(guessesHM.get(keyOfGuessedWord)).get(0).numericValue;
+			String masterW = "unknown";
+			if( masterDominicHM.containsKey(masterNv))
+			{
+				DomWord dw = masterDominicHM.get(masterNv);
+				//masterNv = dw.numericValue;
+				//masterLv = dw.letterValue;
+				masterW = dw.word;
+			}
+			/*
+			float maxTime = 0; int maxTimeIdx=0;
+			int maxGuess = 0; int maxGuessIdx=0;
+			int i = 0;
+			for( DomGuess dg:al)
+			{
+				// find domguess with max num guesses and domguess with max time to guess
+				if( dg.numGuesses > maxGuess ){ maxGuess =  dg.numGuesses;maxGuessIdx=i;}
+				float avg=0;
+				if(  ( avg = (dg.sumOfTimesToGuess/(float)dg.numGuesses)/1000) > maxTime){maxTime=avg; maxTimeIdx = i;} 
+				i++;
+				if( masterNv == null ) masterNv = dg.numericValue;
+				if( masterLv == null ) masterLv = dg.letterValue;
+			}
+			*/
+			int i=0;
+			System.out.println(masterNv+"/"+masterLv+"/"+ masterW);
+			ArrayList<DomGuess> al = guessesHM.get(keyOfGuessedWord);
+		    for(DomGuess dg: al)
+			{
+				// annotate output if really bad or really good
+		    	String decoration = getDecoration(masterNv,dg);
+				System.out.print(decoration);
+				System.out.println(tab + dg.numericValue + "/" + dg.letterValue + "/" + dg.word + ": " + dg.numGuesses + " @ avg " +
+			      (dg.sumOfTimesToGuess/(float)dg.numGuesses)/1000 + " secs");
+				i++;
+			}
+			System.out.println("===============================================");
+		}
+	}
+	protected String getDecoration(String masterKey, DomGuess guess)
+	{
+		if( guess.word.equals("PASS")) return "-";
+		String masterWord = masterDominicHM.get(masterKey)!=null?masterDominicHM.get(masterKey).word:null;
+		if( masterWord!= null &&
+				masterWord.equals(guess.word) && !masterWord.equals("PASS") )
+		{
+			return "+";
+		}
+		if( (guess.sumOfTimesToGuess/(float)guess.numGuesses)/1000 > 5)
+			return "-";
+		if( guess.numGuesses > 1) return "+";
+		return "";
+	}
+	protected void buildMenu()
+	{
+		JMenu toolsMenu = new JMenu("Options");
+		modeMI.addActionListener(this);
+		loadMI.addActionListener(this);
+		loadMI.addActionListener(this);
+		toolsMenu.add(modeMI);
+		toolsMenu.add(loadMI);
+		toolsMenu.add(exitMI);
+		JMenuBar mb = new JMenuBar();
+		mb.add(toolsMenu);
+		jf.setJMenuBar(mb);
+		
+	}
+	protected void buildUI()
+	{
+		jf = new JFrame("Dominic System Quiz");
+		jf.setSize(new Dimension(450, 350));
+		jf.addWindowListener(new WindowAdapter() {
+	        public void windowClosing(WindowEvent e) {
+	        exit();
+	        }
+	    });
+		buildMenu();
+		JPanel inputJP = new JPanel(new GridBagLayout());
+		GridBagConstraints gbc = new GridBagConstraints();
+		
+		gbc.insets = new Insets(2,2,2,2);
+		gbc.gridx = gbc.gridy = 0;
+		
+		gbc.gridwidth=2;
+		gbc.fill= gbc.HORIZONTAL;
+		inputJP.add(runJB, gbc);
+		runJB.addActionListener(this);
+		gbc.gridwidth=1;
+		gbc.fill=gbc.NONE;
+		
+		gbc.gridx=0;gbc.gridy++;
+		JLabel jl = new JLabel("Letter value hint:");
+		inputJP.add(jl,gbc);
+		
+		gbc.gridx++;
+		jl = new JLabel("Numeric value:");
+		inputJP.add(jl,gbc);
+		
+		gbc.gridx++;
+		inputJP.add(isMasterJL,gbc);
+		
+		
+		gbc.gridx=0;gbc.gridy++;
+		letterValueTF.setEditable(false);
+		inputJP.add(letterValueTF,gbc);
+		gbc.gridx++;
+		numericValueTF.setEditable(false);
+		inputJP.add(numericValueTF,gbc);
+		
+		gbc.gridx=0; gbc.gridy++;
+		jl = new JLabel("Dominic Word:");
+		inputJP.add(jl,gbc);
+		
+		gbc.gridx++;
+		inputJP.add(answerTF,gbc);
+		((AbstractDocument) answerTF.getDocument()).setDocumentFilter(filter);
+		answerTF.setEnabled(false);
+		answerTF.requestFocusInWindow();
+		
+		JPanel btJP = new JPanel();
+		btJP.add(submitJB);submitJB.addActionListener(this); submitJB.setEnabled(false);
+		JRootPane jrp = jf.getRootPane(); jrp.setDefaultButton(submitJB);
+		btJP.add(pauseJB);pauseJB.addActionListener(this);pauseJB.setEnabled(false);
+		//btJP.add(cancelJB);cancelJB.addActionListener(this);cancelJB.setEnabled(false);
+		btJP.add(exitJB);exitJB.addActionListener(this);
+		
+		gbc.gridx=0;
+		gbc.gridy++;
+		gbc.fill=gbc.HORIZONTAL;
+		gbc.gridwidth=2;
+		inputJP.add(btJP,gbc);
+		
+		JPanel btJP2 = new JPanel();
+		btJP2.add(peekJB);peekJB.addActionListener(this);peekJB.setEnabled(false);
+		btJP2.add(masterJB);masterJB.addActionListener(this);masterJB.setEnabled(false);
+		
+		gbc.gridx=0;
+		gbc.gridy++;
+		inputJP.add(btJP2,gbc);
+		
+		gbc.gridx=0;
+		gbc.gridy++;
+		JPanel jp3 = new JPanel();
+		jp3.add(peekJL);
+		inputJP.add(jp3,gbc);
+		
+		jf.getContentPane().add(inputJP,BorderLayout.CENTER);
+		
+		JPanel imageJP = new JPanel();
+		imageJP.setBorder(new TitledBorder("Image Peek"));
+		//ImageIcon ii = new ImageIcon("dribblewarthog.jpg");
+		
+		imageJL = new JLabel();
+		imageJL.setPreferredSize(new Dimension(imageWidth,imageHeight));
+		imageJP.add(imageJL);
+		jf.getContentPane().add(imageJP,BorderLayout.WEST);
+		
+		jf.getContentPane().add(dummyNorth,BorderLayout.NORTH);
+		jf.getContentPane().add(dummySouth,BorderLayout.SOUTH);
+
+		//jf.pack();
+	}
+	@Override
+	public void actionPerformed(ActionEvent arg0) {
+		if( arg0.getSource().equals(exitJB) || arg0.getSource().equals(exitMI)) exit();
+		/*if( arg0.getSource().equals(cancelJB)){ 
+			if( running )
+			{
+				running = false;
+				
+				submitGuess();
+				enablebts(false);
+				displayResults();
+				return;
+			}
+		}*/
+		if( arg0.getSource().equals(runJB))  
+		{
+			if( runJB.getText().equals("Start!"))
+			{
+				runJB.setText("Stop");
+				enablebts(true);
+				running = true;
+				primeUIWithNextDomWord();
+			}
+			else
+			{
+				running=false;
+				runJB.setText("Start!");
+				enablebts(false);
+				displayResults();
+				return;
+			}
+		}
+		if( arg0.getSource().equals(submitJB))
+		{
+			submitGuess();
+		}
+		if( arg0.getSource().equals(peekJB))
+		{
+			DomWord dw  = masterDominicHM.get(numericValueTF.getText());
+			peekJL.setText(dw==null?"unknown":dw.word);
+			letterValueTF.setText(
+			                      majorLettersHM.get(numericValueTF.getText().substring(0,1))+
+			                      majorLettersHM.get(numericValueTF.getText().substring(1))
+			                     );
+			
+			setImage();
+			
+		}
+		if( arg0.getSource().equals(this.masterJB))
+		{
+			makeThisAMasterWord(numericValueTF.getText(), letterValueTF.getText(),answerTF.getText());
+		}
+		
+	}
+	String imagePrefixLocation = "C:/aaa/kindle/mnemonics/OEBPS/Images/sm";
+
+	protected void setImage( )
+	{
+		Image img = null;
+		try
+		{
+			DomWord master = masterDominicHM.get(numericValueTF.getText());
+			String word = master.word.replace(" ","_");
+			File f = new File(imagePrefixLocation,numericValueTF.getText() + "_" +  word + ".gif");
+			if( f.exists())
+			{
+				img = ImageIO.read(f);
+					//Image img = ImageIO.read(new File("clown_60.gif"));
+			 
+			Image resizedImage = img.getScaledInstance(imageJL.getWidth(),imageJL.getHeight(),0);
+			imageJL.setIcon(new ImageIcon(resizedImage));
+			}
+		}
+		catch(Throwable t)
+		{
+			t.printStackTrace();
+		    System.err.println("Error showing image "+ t.getMessage());
+		    imageJL.setIcon(null);
+		}
+		
+	}
+	protected void enablebts(boolean x)
+	{
+		//runJB.setEnabled(!x);
+		submitJB.setEnabled(x);
+		//cancelJB.setEnabled(x);
+		pauseJB.setEnabled(x);
+		peekJB.setEnabled(x);
+		masterJB.setEnabled(x);
+		answerTF.setEnabled(x);
+	}
+	protected void exit()
+	{
+		int ans = JOptionPane.showConfirmDialog(null, "Exit?");
+		if( ans != JOptionPane.YES_OPTION ){ return; }
+		// todo: save off values
+		saveGuesses();
+		saveMajorLettersToTextFile();
+		saveGuessesToTextFile();
+		saveMasterDomWordsToTextFile();
+		System.exit(0);
+	}
+
+}
+class DomWord implements Serializable
+{
+	public String numericValue;
+	public String letterValue;
+	public String word;
+	public DomWord(String nv, String lv)
+	{
+		this(nv,lv,null);
+	}
+	public DomWord(String nv, String lv, String w)
+	{
+		this.numericValue = nv;
+		this.letterValue = lv;
+		this.word = w;
+	}
+}
+class DomWordMaster extends DomWord implements Serializable
+{
+
+	public DomWordMaster(String nv, String lv, String w) {
+		super(nv,lv,w);
+	}
+	
+}
+class DomGuess extends DomWord implements Serializable
+{
+	/**
+	 * 
+	 */
+	//private static final long serialVersionUID = -7030599377589876632;
+	int numGuesses;
+	long startTime;
+	long stopTime;
+	float sumOfTimesToGuess;
+	public DomGuess(String nv, String lv, String w, long timeToGuess) {
+		this(nv,lv,w,timeToGuess,0);
+	}
+	public DomGuess(String nv, String lv, String w, long timeToGuess, int numGuess) {
+		super(nv,lv,w);
+		sumOfTimesToGuess = timeToGuess;
+		numGuesses = numGuess;
+	}
+	public void addTTG(long newTimeToGuess)
+	{
+		sumOfTimesToGuess = (sumOfTimesToGuess+(float)newTimeToGuess);
+	}
+	
+}
+class UppercaseDocumentFilter extends DocumentFilter {
+    public void insertString(DocumentFilter.FilterBypass fb, int offset,
+            String text, AttributeSet attr) throws BadLocationException {
+
+        fb.insertString(offset, text.toUpperCase(), attr);
+    }
+
+    public void replace(DocumentFilter.FilterBypass fb, int offset, int length,
+            String text, AttributeSet attrs) throws BadLocationException {
+
+        fb.replace(offset, length, text.toUpperCase(), attrs);
+    }
+}
