@@ -3,4 +3,4 @@ mnemonics
 
 Training for the Dominic mnemonic memory system
 
-![alt text](Isolated.png "Dominic Memory System Trainer")
+![alt text](screen_shot_example.GIF "Dominic Memory System Trainer")
